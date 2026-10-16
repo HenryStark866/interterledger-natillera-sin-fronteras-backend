@@ -4,6 +4,8 @@ import {
   SecretsManagerClient,
   GetSecretValueCommand,
 } from "@aws-sdk/client-secrets-manager";
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { PutCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 
 const client = new CognitoIdentityProviderClient({ region: 'us-east-1' });
 
@@ -29,10 +31,38 @@ export const handler = async (event: any,) => {
       throw new Error('Phone number already registered');
     }
 
+    await saveUserEvent(event);
   } catch (error) {
     throw (error);
   }
 };
+
+const saveUserEvent = async (event: any) => {
+  const client = new DynamoDBClient({});
+  const docClient = DynamoDBDocumentClient.from(client);
+
+  try {
+    const item = {
+      source: event.Username,
+      id: 1,
+      walletId: event?.request?.userAttributes['custom:walletId'],
+      phoneNumber: event.request.userAttributes['phone_number'],
+      email: event?.request?.userAttributes?.email,
+    }
+    
+    const command = new PutCommand({
+    TableName: process.env.USER_VIEW_TABLE,
+    Item: item,
+  });
+    
+    await docClient.send(command);
+    console.log('Item was saved in dynamodb table');
+
+  } catch (error) {
+    console.log(error);
+    throw(error);
+  }
+}
 
 const isWalletRegistered = async (walletId: string): Promise<boolean | undefined> => {
   try {
